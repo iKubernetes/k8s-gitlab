@@ -3,38 +3,14 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: gitlab
-  namespace: gitlab
-  labels:
-    app: gitlab
-spec:
-  ports:
-    - name: http
-      protocol: TCP
-      port: 31080 
-      targetPort: 80
-    - name: ssh
-      protocol: TCP
-      port: 31022
-      targetPort: 22
-  selector:
-    app: gitlab
-  type: LoadBalancer
-  externalTrafficPolicy: Cluster
----
-## Service
-kind: Service
-apiVersion: v1
-metadata:
   name: code
   namespace: gitlab
-  labels:
-    app: gitlab
 spec:
+  type: LoadBalancer
   ports:
     - name: http
       protocol: TCP
-      port: 80 
+      port: 80
       targetPort: 80
     - name: ssh
       protocol: TCP
@@ -43,13 +19,29 @@ spec:
   selector:
     app: gitlab
 ---
-kind: Deployment
-apiVersion: apps/v1
+apiVersion: v1
+kind: Service
 metadata:
   name: gitlab
   namespace: gitlab
   labels:
+    name: gitlab
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: ssh
+      port: 22
+      targetPort: ssh
+  selector:
     app: gitlab
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab
+  namespace: gitlab
 spec:
   replicas: 1
   selector:
@@ -63,25 +55,13 @@ spec:
     spec:
       containers:
       - name: gitlab
-        image: 'sameersbn/gitlab:14.8.2'
-        ports:
-        - name: ssh
-          containerPort: 22
-        - name: http
-          containerPort: 80
-        - name: https
-          containerPort: 443
+        image: sameersbn/gitlab:15.4.0
         env:
         - name: TZ
           value: Asia/Shanghai
         - name: GITLAB_TIMEZONE
           value: Asia/Shanghai
-        - name: GITLAB_SECRETS_OTP_KEY_BASE
-          # Be used to encrypt 2FA secrets in the database. "long-and-random-alpha-numeric-string"
-          valueFrom:
-            secretKeyRef:
-              name: gitlab
-              key: gitlab_secrets_otp_key_base
+
         - name: GITLAB_SECRETS_DB_KEY_BASE
           # Be used to encrypt CI secret variables, as well as import credentials, in the database.
           valueFrom:
@@ -94,6 +74,13 @@ spec:
             secretKeyRef:
               name: gitlab
               key: gitlab_secrets_secret_key_base
+        - name: GITLAB_SECRETS_OTP_KEY_BASE
+          # Be used to encrypt 2FA secrets in the database. "long-and-random-alpha-numeric-string"
+          valueFrom:
+            secretKeyRef:
+              name: gitlab
+              key: gitlab_secrets_otp_key_base
+
         - name: GITLAB_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -101,22 +88,30 @@ spec:
               key: gitlab_root_pass
         - name: GITLAB_ROOT_EMAIL 
           value: mage@magedu.com
-        - name: GITLAB_HOST           
-          value: 'code.gitlab.svc.cluster.local'
-        - name: GITLAB_PORT        
-          value: '80' 
-        - name: GITLAB_SSH_PORT   
-          value: '22'
+
+        - name: GITLAB_HOST
+          value: gitlab.gitlab.svc.cluster.local
+        - name: GITLAB_PORT
+          value: "80"
+        - name: GITLAB_SSH_PORT
+          value: "22"
+
         - name: GITLAB_NOTIFY_ON_BROKEN_BUILDS
-          value: 'true'
+          value: "true"
         - name: GITLAB_NOTIFY_PUSHER
-          value: 'false'
-        - name: DB_TYPE             
+          value: "false"
+
+        - name: GITLAB_BACKUP_SCHEDULE
+          value: daily
+        - name: GITLAB_BACKUP_TIME
+          value: 01:00
+
+        - name: DB_TYPE
           value: postgres
-        - name: DB_HOST         
-          value: gitlab-postgresql           
-        - name: DB_PORT          
-          value: '5432'
+        - name: DB_HOST
+          value: postgresql
+        - name: DB_PORT
+          value: "5432"
         - name: DB_USER        
           valueFrom:
             secretKeyRef:
@@ -127,35 +122,65 @@ spec:
             secretKeyRef:
               name: gitlab
               key: db_pass
-        - name: DB_NAME          
-          value: gitlabhq_production
+        - name: DB_NAME
+          value: gitlab_production
+
         - name: REDIS_HOST
-          value: gitlab-redis              
-        - name: REDIS_PORT      
-          value: '6379'
-        resources: 
-          requests:
-            cpu: 200m
-            memory: 500Mi
-          limits:
-            cpu: 2
-            memory: 8Gi
+          value: redis
+        - name: REDIS_PORT
+          value: "6379"
+
+        - name: SMTP_ENABLED
+          value: "false"
+        - name: SMTP_DOMAIN
+          value: magedu.com
+        - name: SMTP_HOST
+          value: smtp.gmail.com
+        - name: SMTP_PORT
+          value: "587"
+        - name: SMTP_USER
+          value: mailer@magedu.com
+        - name: SMTP_PASS
+          value: password
+        - name: SMTP_STARTTLS
+          value: "true"
+        - name: SMTP_AUTHENTICATION
+          value: login
+
+        - name: IMAP_ENABLED
+          value: "false"
+        - name: IMAP_HOST
+          value: imap.gmail.com
+        - name: IMAP_PORT
+          value: "993"
+        - name: IMAP_USER
+          value: mailer@magedu.com
+        - name: IMAP_PASS
+          value: password
+        - name: IMAP_SSL
+          value: "true"
+        - name: IMAP_STARTTLS
+          value: "false"
+        ports:
+        - name: http
+          containerPort: 80
+        - name: ssh
+          containerPort: 22
+        volumeMounts:
+        - mountPath: /home/git/data
+          name: data
         livenessProbe:
           httpGet:
             path: /
             port: 80
-          initialDelaySeconds: 300
+          initialDelaySeconds: 180
           timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /
             port: 80
-          initialDelaySeconds: 30
-          timeoutSeconds: 3
-        volumeMounts:
-        - name: localtime
-          mountPath: /etc/localtime
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
       volumes:
-      - name: localtime
-        hostPath:
-          path: /etc/localtime
+      - name: data
+        emptyDir: {}

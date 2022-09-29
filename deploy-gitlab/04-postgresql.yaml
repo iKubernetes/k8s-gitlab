@@ -1,30 +1,24 @@
 ---
-## Service
-kind: Service
 apiVersion: v1
+kind: Service
 metadata:
-  name: gitlab-postgresql
+  name: postgresql
   namespace: gitlab
   labels:
-    app: gitlab-postgresql
+    name: postgresql
 spec:
   ports:
     - name: postgres
-      protocol: TCP
       port: 5432
       targetPort: postgres
   selector:
     app: postgresql
-  type: ClusterIP
 ---
-## Deployment
-kind: Deployment
 apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: gitlab-pgsql
+  name: postgresql
   namespace: gitlab
-  labels:
-    app: postgresql
 spec:
   replicas: 1
   selector:
@@ -39,9 +33,6 @@ spec:
       containers:
       - name: postgresql
         image: sameersbn/postgresql:12-20200524
-        ports:
-        - name: postgres
-          containerPort: 5432
         env:
         - name: DB_USER
           valueFrom:
@@ -54,29 +45,35 @@ spec:
               name: gitlab
               key: db_pass
         - name: DB_NAME
-          value: gitlabhq_production
+          value: gitlab_production
         - name: DB_EXTENSION
           value: 'pg_trgm,btree_gist'
-        resources: 
-          requests:
-            cpu: 200m
-            memory: 256Mi
-          limits:
-            cpu: 2
-            memory: 2Gi
+        ports:
+        - name: postgres
+          containerPort: 5432
+        volumeMounts:
+        - mountPath: /var/lib/postgresql
+          name: data
         livenessProbe:
           exec:
-            command: ["pg_isready","-h","localhost","-U","postgres"]
+            command:
+            - pg_isready
+            - -h
+            - localhost
+            - -U
+            - postgres
           initialDelaySeconds: 30
           timeoutSeconds: 5
-          periodSeconds: 10
-          successThreshold: 1
-          failureThreshold: 3
         readinessProbe:
           exec:
-            command: ["pg_isready","-h","localhost","-U","postgres"]
+            command:
+            - pg_isready
+            - -h
+            - localhost
+            - -U
+            - postgres
           initialDelaySeconds: 5
           timeoutSeconds: 1
-          periodSeconds: 10
-          successThreshold: 1
-          failureThreshold: 3
+      volumes:
+      - name: data
+        emptyDir: {}
