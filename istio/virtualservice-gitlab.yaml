@@ -1,0 +1,22 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: gitlab-virtualservice
+  namespace: gitlab
+spec:
+  hosts:
+  - "gitlab.magedu.com"
+  - "code.magedu.com"
+  gateways:
+  - istio-system/gitlab-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: gitlab
+        port:
+          number: 31080
+---

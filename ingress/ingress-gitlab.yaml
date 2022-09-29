@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitlab
+  namespace: gitlab
+  labels:
+    app: gitlab
+spec:
+  ingressClassName: 'nginx'
+  rules:
+  - host: gitlab.magedu.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gitlab
+            port:
+              number: 80
+  - host: git-ssh.magedu.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gitlab
+            port: 
+              number: 22
